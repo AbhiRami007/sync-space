@@ -1,8 +1,11 @@
 import { Router } from "express";
-import { getHealth } from "../controllers/healthController";
+import { signup, login, getMe } from "../controllers/authController";
+import { protect } from "../middleware/authMiddleware";
 
 const router = Router();
 
-router.get("/", getHealth);
+router.post("/signup", signup);
+router.post("/login", login);
+router.get("/me", protect, getMe);
 
 export default router;
