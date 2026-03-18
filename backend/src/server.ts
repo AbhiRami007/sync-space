@@ -6,6 +6,7 @@ import { Server } from "socket.io";
 import apiRoutes from "./routes";
 import { notFound } from "./middleware/notFound";
 import { registerChatHandlers } from "./sockets/chatSocket";
+import { connectRedis } from "./config/redis";
 
 dotenv.config();
 
@@ -37,6 +38,12 @@ io.on("connection", (socket) => {
   registerChatHandlers(io, socket);
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+connectRedis()
+  .then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Failed to connect Redis:", error);
+  });

@@ -8,24 +8,29 @@
 
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script>
-      const roomId = "1773799986369";
+      const roomId = "1773810038794";
+      const userId = "user1";
 
       const socket = io("http://localhost:4000");
 
       socket.on("connect", () => {
         console.log("Connected:", socket.id);
 
-        socket.emit("join_room", roomId);
+        socket.emit("join_room", { roomId, userId });
 
         socket.emit("send_message", {
           roomId,
-          text: "hello from synced socket message",
-          senderId: "user1"
+          text: "hello from presence test",
+          senderId: userId
         });
       });
 
       socket.on("receive_message", (data) => {
         console.log("Received message:", data);
+      });
+
+      socket.on("presence_update", (data) => {
+        console.log("Presence update:", data);
       });
 
       socket.on("socket_error", (error) => {

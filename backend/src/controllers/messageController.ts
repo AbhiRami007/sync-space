@@ -3,9 +3,10 @@ import {
   createMessageService,
   getMessagesByRoomService,
 } from "../services/messageService";
+import { redisClient } from "../config/redis";
 import { getRoomByIdService } from "../services/roomService";
 
-export const sendMessage = (req: Request, res: Response) => {
+export const sendMessage = async (req: Request, res: Response) => {
   try {
     const { roomId, text } = req.body;
     const userId = (req as Request & { user?: { id: string } }).user?.id;
@@ -35,6 +36,8 @@ export const sendMessage = (req: Request, res: Response) => {
 
     const message = createMessageService(roomId, text, userId);
 
+    await redisClient.del(`room:${roomId}:messages`);
+
     return res.status(201).json({
       success: true,
       message: "Message sent successfully",
@@ -48,9 +51,9 @@ export const sendMessage = (req: Request, res: Response) => {
   }
 };
 
-export const getMessagesByRoom = (req: Request, res: Response) => {
+export const getMessagesByRoom = async (req: Request, res: Response) => {
   try {
-    const { roomId } : any = req.params;
+    const { roomId }: any = req.params;
 
     const room = getRoomByIdService(roomId);
 
@@ -61,11 +64,29 @@ export const getMessagesByRoom = (req: Request, res: Response) => {
       });
     }
 
+    const cacheKey = `room:${roomId}:messages`;
+
+    const cachedMessages = await redisClient.get(cacheKey);
+
+    if (cachedMessages) {
+      return res.status(200).json({
+        success: true,
+        roomId,
+        source: "cache",
+        messages: JSON.parse(cachedMessages),
+      });
+    }
+
     const roomMessages = getMessagesByRoomService(roomId);
+
+    await redisClient.set(cacheKey, JSON.stringify(roomMessages), {
+      EX: 60,
+    });
 
     return res.status(200).json({
       success: true,
       roomId,
+      source: "service",
       messages: roomMessages,
     });
   } catch {

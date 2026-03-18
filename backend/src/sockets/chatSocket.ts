@@ -1,11 +1,33 @@
 import { Server, Socket } from "socket.io";
 import { getRoomByIdService } from "../services/roomService";
 import { createMessageService } from "../services/messageService";
+import {
+  addUserToRoomPresence,
+  removeUserFromRoomPresence,
+  getOnlineUsersByRoom,
+} from "../services/presenceService";
+
+type ActiveSocketData = {
+  roomId?: string;
+  userId?: string;
+};
 
 export const registerChatHandlers = (io: Server, socket: Socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  socket.on("join_room", (roomId: string) => {
+  const activeData: ActiveSocketData = {};
+
+  socket.on("join_room", async (data: { roomId: string; userId: string }) => {
+    const { roomId, userId } = data;
+
+    if (!roomId || !userId) {
+      socket.emit("socket_error", {
+        success: false,
+        message: "roomId and userId are required",
+      });
+      return;
+    }
+
     const room = getRoomByIdService(roomId);
 
     if (!room) {
@@ -17,7 +39,21 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
     }
 
     socket.join(roomId);
-    console.log(`Socket ${socket.id} joined room ${roomId}`);
+
+    activeData.roomId = roomId;
+    activeData.userId = userId;
+
+    await addUserToRoomPresence(roomId, userId);
+
+    const onlineUsers = await getOnlineUsersByRoom(roomId);
+
+    io.to(roomId).emit("presence_update", {
+      success: true,
+      roomId,
+      onlineUsers,
+    });
+
+    console.log(`Socket ${socket.id} joined room ${roomId} as user ${userId}`);
   });
 
   socket.on(
@@ -52,7 +88,19 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
     }
   );
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
+    if (activeData.roomId && activeData.userId) {
+      await removeUserFromRoomPresence(activeData.roomId, activeData.userId);
+
+      const onlineUsers = await getOnlineUsersByRoom(activeData.roomId);
+
+      io.to(activeData.roomId).emit("presence_update", {
+        success: true,
+        roomId: activeData.roomId,
+        onlineUsers,
+      });
+    }
+
     console.log(`User disconnected: ${socket.id}`);
   });
 };
